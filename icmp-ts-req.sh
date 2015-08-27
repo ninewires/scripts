@@ -25,40 +25,31 @@ if [ $# -ne 1 ]; then
 fi
 
 # Format Check
-err=()
-while read ipaddr; do
-        if ! [[ $ipaddr =~ ^[0-9]{,3}\.[0-9]{,3}\.[0-9]{,3}\.[0-9]{,3}$ ]]; then
-                err+=($?)
-                echo "In $1 [$ipaddr] Does Not Contain Valid IP Address" >&2
-        else
-                err+=($?)
-        fi
-done < $1
+if ! [[ $1 =~ ^[0-9]{,3}\.[0-9]{,3}\.[0-9]{,3}\.[0-9]{,3}$ ]]; then
+	echo
+	echo "$1 Does Not Contain a Valid IP Address" >&2
+	echo
+	exit 1
+else
+	:
+fi
 
 # Valid IP Address Check
-addr=$(echo $1 | tr \. " " )
+addr=( $(echo $1 | tr \. " ") )
 
-if ! [[ $1 =~ [1-9]{,3}\.[0-9]{,3}\.[0-9]{,3} ]]; then
+if [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 \
+|| ${addr[2]} -gt 255 || ${addr[3]} -gt 255 ]]; then
         echo
         echo "$1 Does Not Contain a Valid IP Address" >&2
         echo
         exit
 else
-        :
-fi
-
-if [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 \
-|| ${addr[2]} -gt 255 ]]; then
-        echo
-        echo "$1 Does Not Contain a Valid IP Address"
-        echo
-        exit
-else
-        :
+	:
 fi
 
 
 # Ping host for timestamp reply
+#ip_addr=$1
 nping --icmp-type timestamp $1 > ts_tmp.txt
 
 # Use Receive Time on count 5
