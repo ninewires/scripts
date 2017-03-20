@@ -93,7 +93,7 @@ else
 			regexpdate=$(grep -m1 'Expiration Date:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
 			regorg=$(grep -m1 'Registrant Organization:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regemail=$(grep -m1 'Registrant Email:' tmpwhois | cut -d':' -f2)
-			iptmp=$(ping -c1 automatedfl.com 2>&1)
+			iptmp=$(ping -c1 $domain 2>&1)
 			if echo $iptmp | grep -q 'unknown host'; then
 				echo "$domain,$registrar,$regdate--$regexpdate,$regorg,$regemail,No IP Found,No Host Org Found" >> tmpoutfile
 			else
