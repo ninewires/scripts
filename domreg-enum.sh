@@ -55,9 +55,9 @@ done
 outfile=$(echo $emaildomain | cut -d'.' -f1 | sed 's|$|_domains.csv|g')
 
 # get domains registered by target email address domain
-curl --silent http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
+curl http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
 sleep 2
-curl --silent http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
+curl http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
 
 if grep 'There are 0 domains' tmpcurl1 && grep 'There are 0 domains' tmpcurl2; then
 	echo
@@ -69,48 +69,54 @@ elif ! [ -s tmpcurl1 ] && ! [ -s tmpcurl2 ]; then
 	echo -e "${RED}[!] ${WHT}No ${RED}$emaildomain ${WHT}& ${RED}$orgname ${WHT}not found :-(${NC}"
 	rm tmpcurl1 tmpcurl2
 	exit 1
+elif grep -Fq 'paymenthash' tmpcurl1; then
+	# generate list of domains registered by email address domain - large result count
+	grep 'Domain Name' tmpcurl1 | sed 's|<tr>|\n|g' | grep '</td></tr>' | cut -d'>' -f2 | cut -d'<' -f1 > tmpdomainlist
+	grep 'Domain Name' tmpcurl2 | sed 's|<tr>|\n|g' | grep '</td></tr>' | cut -d'>' -f2 | cut -d'<' -f1 >> tmpdomainlist
+	sort -uV tmpdomainlist -o tmpdomainlist
 else
 	# generate list of domains registered by email address domain
 	grep 'ViewDNS.info' tmpcurl1 | sed 's|<tr>|\n|g' | grep '</td></tr>' | grep -v -E 'font size|Domain Name' | cut -d'>' -f2 | cut -d'<' -f1 > tmpdomainlist
 	grep 'ViewDNS.info' tmpcurl2 | sed 's|<tr>|\n|g' | grep '</td></tr>' | grep -v -E 'font size|Domain Name' | cut -d'>' -f2 | cut -d'<' -f1 >> tmpdomainlist
 	sort -uV tmpdomainlist -o tmpdomainlist
-	domcount=$(wc -l tmpdomainlist | sed -e 's|^[ \t]*||' | cut -d' ' -f1)
-	echo 'AAAAA--placeholder--' > tmpoutfile
-	echo
-	echo -e "${GRN}[*] ${WHT}Found ${GRN}$domcount ${WHT}domains for ${GRN}$orgname ${WHT}& ${GRN}$emaildomain${NC}"
-	echo
-	echo -e "${GRN}[*] ${WHT}Enumerating domain details. . .${NC}"
-
-	# loop thru domain list gathering details about the domain
-	while read domain; do
-		whois -H $domain 2>&1 | sed -e 's|^[ \t]*||' | sed 's| \+ ||g' | sed 's|: |:|g' > tmpwhois
-		nomatch=$(grep -c -E 'No match for|Name or service not known' tmpwhois)
-		if [[ $nomatch -eq 1 ]]; then
-			echo "$domain -- No Whois Matches Found" >> tmpoutfile
-		else
-			registrar=$(grep -m1 'Registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
-			regdate=$(grep -m1 'Creation Date:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
-			regexpdate=$(grep -m1 'Expiration Date:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
-			regorg=$(grep -m1 'Registrant Organization:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
-			regemail=$(grep -m1 'Registrant Email:' tmpwhois | cut -d':' -f2)
-			iptmp=$(ping -c1 $domain 2>&1)
-			if echo $iptmp | grep -q 'unknown host'; then
-				echo "$domain,$registrar,$regdate--$regexpdate,$regorg,$regemail,No IP Found,No Host Org Found" >> tmpoutfile
-			else
-				ipaddr=$(echo $iptmp | grep 'PING' | cut -d'(' -f2 | cut -d')' -f1)
-				hostorg=$(whois $ipaddr | sed 's| \+ ||g' | grep 'Organization' | cut -d':' -f2 | sed 's|,||g')
-				echo "$domain,$registrar,$regdate--$regexpdate,$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
-			fi
-		fi
-		let number=number+1
-		echo -ne "\t${GRN}$number ${WHT}of ${GRN}$domcount ${WHT}domains${NC}"\\r
-    	
-		sleep 2
-	done < tmpdomainlist
 fi
+
+domcount=$(wc -l tmpdomainlist | sed -e 's|^[ \t]*||' | cut -d' ' -f1)
+echo '111AAA--placeholder--' > tmpoutfile
+echo
+echo -e "${GRN}[*] ${WHT}Found ${GRN}$domcount ${WHT}domains for ${GRN}$orgname ${WHT}& ${GRN}$emaildomain${NC}"
+echo
+echo -e "${GRN}[*] ${WHT}Enumerating domain details. . .${NC}"
+
+# loop thru domain list gathering details about the domain
+while read domain; do
+	whois -H $domain 2>&1 | sed -e 's|^[ \t]*||' | sed 's| \+ ||g' | sed 's|: |:|g' > tmpwhois
+	nomatch=$(grep -c -E 'No match for|Name or service not known' tmpwhois)
+	if [[ $nomatch -eq 1 ]]; then
+		echo "$domain -- No Whois Matches Found" >> tmpoutfile
+	else
+		registrar=$(grep -m1 'Registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
+		regdate=$(grep -m1 -E 'Creation Date:|Registration Date:' tmpwhois | cut -d':' -f2 | sed 's|T.*$||g')
+		regexpdate=$(grep -m1 -E 'Expiration Date:|Expiry Date:' tmpwhois | cut -d':' -f2 | sed 's|T.*$||g')
+		regorg=$(grep -m1 'Registrant Organization:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
+		regemail=$(grep -m1 'Registrant Email:' tmpwhois | cut -d':' -f2)
+		iptmp=$(ping -c1 $domain 2>&1)
+		if echo $iptmp | grep -q 'unknown host'; then
+			echo "$domain,$registrar,$regdate--$regexpdate,$regorg,$regemail,No IP Found,No Host Org Found" >> tmpoutfile
+		else
+			ipaddr=$(echo $iptmp | grep 'PING' | cut -d'(' -f2 | cut -d')' -f1)
+			hostorg=$(whois $ipaddr | sed 's| \+ ||g' | grep -m1 'Organization' | cut -d':' -f2 | sed 's|,||g')
+			echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
+		fi
+	fi
+	let number=number+1
+	echo -ne "\t${GRN}$number ${WHT}of ${GRN}$domcount ${WHT}domains${NC}"\\r
+
+	sleep 2
+done < tmpdomainlist
 
 echo
 echo -e "${GRN}[*] ${WHT}All finished. Results can be found in ${GRN}$outfile ${WHT}in the current directory.${NC}"
-sort tmpoutfile | sed 's|AAAAA--placeholder--|Domain,Registrar,Create--Exp Date,Registration Org,Reg Email,IP Address,Host Org|' > $outfile
+sort -V tmpoutfile | sed 's|111AAA--placeholder--|Domain,Registrar,Create--Exp Date,Registration Org,Reg Email,IP Address,Host Org|' > $outfile
 
 rm tmpcurl1 tmpcurl2 tmpdomainlist tmpwhois tmpoutfile 2>/dev/null
