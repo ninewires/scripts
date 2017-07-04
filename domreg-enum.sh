@@ -55,9 +55,9 @@ done
 outfile=$(echo $emaildomain | cut -d'.' -f1 | sed 's|$|_domains.csv|g')
 
 # get domains registered by target email address domain
-curl http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
+curl --silent http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
 sleep 2
-curl http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
+curl --silent http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
 
 if grep 'There are 0 domains' tmpcurl1 && grep 'There are 0 domains' tmpcurl2; then
 	echo
