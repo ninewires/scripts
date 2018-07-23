@@ -55,9 +55,9 @@ done
 outfile=$(echo $emaildomain | cut -d'.' -f1 | sed 's|$|_domains.csv|g')
 
 # get domains registered by target email address domain
-curl --silent http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
+curl --silent -L http://viewdns.info/reversewhois/?q=%40$emaildomain > tmpcurl1
 sleep 5
-curl --silent http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
+curl --silent -L http://viewdns.info/reversewhois/?q=$orgnamehtml > tmpcurl2
 
 if grep 'There are 0 domains' tmpcurl1 && grep 'There are 0 domains' tmpcurl2; then
 	echo
@@ -95,7 +95,7 @@ while read domain; do
 		echo "$domain, -- No Whois Matches Found" >> tmpoutfile
 	else
 		# .au .ae 
-		if grep 'A.B.N. SEARCH' tmpwhois; then
+		if grep -q 'A.B.N. SEARCH' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois		#remove multiple spaces
 			registrar=$(grep -m1 'Registrar Name:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regorg=$(grep -m1 -E 'Registrant:|Registrant Contact Organisation:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
@@ -109,7 +109,7 @@ while read domain; do
 					echo "$domain,$registrar,--,$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .uk
-		elif grep 'Copyright Nominet' tmpwhois; then
+		elif grep -q 'Copyright Nominet' tmpwhois; then
 			sed -i -e 's|^[ \t]*||' tmpwhois        					#remove leading white space
 			sed -i 's|\s*$||g' tmpwhois             					#remove trailing white space
 			sed -i -e ':a' -e 'N' -e '$!ba' -e 's/:\n/:/g' tmpwhois		#replace colon line feed with nothing
@@ -129,7 +129,7 @@ while read domain; do
 					echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .sg
-		elif grep 'SGNIC' tmpwhois; then
+		elif grep -q 'SGNIC' tmpwhois; then
 			sed -i -e 's|^[ \t]*||' tmpwhois	#remove leading white space
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			sed -i 's|\t||g' tmpwhois			#remove tab
@@ -148,7 +148,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .fi .no
-		elif grep -E 'NORID|Finnish Communications' tmpwhois;then
+		elif grep -q -E 'NORID|Finnish Communications' tmpwhois;then
 			sed -i 's|\.\+\.||g' tmpwhois	#remove multiple periods
 			sed -i 's|: |:|g' tmpwhois		#replace colon space with colon
 			sed -i 's| \+ ||g' tmpwhois		#remove multiple spaces
@@ -165,7 +165,7 @@ while read domain; do
 					echo "$domain,--,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .ie
-		elif grep 'iedr.ie' tmpwhois; then
+		elif grep -q 'iedr.ie' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
 			regorg=$(grep -m1 'desc:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
@@ -181,7 +181,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,--,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .it .at .cz
-		elif grep -E 'NIC.AT|nic.it|nic.cz' tmpwhois; then
+		elif grep -q -E 'NIC.AT|nic.it|nic.cz' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois		#remove multiple spaces
 			registrar='NIC'
 			regdate=$(grep -m1 -E 'Created:|registered:' tmpwhois | cut -d':' -f2 | cut -d' ' -f1)
@@ -197,7 +197,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .pt
-		elif grep 'Titular / Registrant' tmpwhois; then
+		elif grep -q 'Titular / Registrant' tmpwhois; then
 			sed -i -e 's|^[ \t]*||' tmpwhois	#remove leading white space
 			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
 			registrar=$(grep -A1 'Tech Contact' tmpwhois | grep -v 'Tech Contact' | sed 's|,||g')
@@ -214,7 +214,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .jp
-		elif grep 'JPRS' tmpwhois; then
+		elif grep -q 'JPRS' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois		#remove multiple spaces
 			sed -i 's|\[||g' tmpwhois		#remove left bracket
 			sed -i 's|]|:|g' tmpwhois		#replace right bracket with colon
@@ -231,7 +231,7 @@ while read domain; do
 				echo "$domain,--,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .tz
-		elif grep 'TZNIC' tmpwhois; then
+		elif grep -q 'TZNIC' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			registrar=$(grep -m1 'registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regdate=$(grep -m1 'registred:' tmpwhois | cut -d':' -f2 | cut -d' ' -f1)
@@ -247,7 +247,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .hk
-		elif grep 'HKIRC' tmpwhois; then
+		elif grep -q 'HKIRC' tmpwhois; then
 			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			registrar=$(grep -m1 'Registrar Name:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
@@ -264,7 +264,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .ru
-		elif grep 'RIPN' tmpwhois; then
+		elif grep -q 'RIPN' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			registrar=$(grep -m1 'registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regdate=$(grep -m1 'created:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
@@ -279,7 +279,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,--,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .dk
-		elif grep 'DK Hostmaster' tmpwhois; then
+		elif grep -q 'DK Hostmaster' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			regdate=$(grep -m1 'Registered:' tmpwhois | cut -d':' -f2)
 			regexpdate=$(grep -m1 'Expires:' tmpwhois | cut -d':' -f2)
@@ -292,13 +292,24 @@ while read domain; do
 				hostorg=$(whois $ipaddr 2>&1 | sed 's| \+ ||g' | grep -m1 -E 'Organization|address:' | cut -d':' -f2 | sed 's|,||g')
 				echo "$domain,--,${regdate}--${regexpdate},$regorg,--,$ipaddr,$hostorg" >> tmpoutfile
 			fi
-		# NeuStar
-		elif grep 'NeuStar' tmpwhois; then
+		# NeuStar/.us
+		elif grep -q 'NeuStar' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
-			registrar=$(grep -m1 'Sponsoring Registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
-			regdate=$(grep -m1 'Domain Registration Date:' tmpwhois | cut -d':' -f2- | cut -d' ' -f2,3,6 | sed 's| |-|g')
-			regexpdate=$(grep -m1 'Domain Expiration Date:' tmpwhois | cut -d':' -f2- | cut -d' ' -f2,3,6 | sed 's| |-|g')
-			regorg=$(grep -m1 'Registrant Organization:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
+			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
+			registrar=$(grep -m1 -E 'Sponsoring Registrar:|Registrar:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
+			if grep -q 'Creation Date:' tmpwhois; then
+				regdate=$(grep -m1 'Creation Date:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
+			fi
+			if grep -q 'Domain Registration Date:' tmpwhois; then
+				regdate=$(grep -m1 'Domain Registration Date:' tmpwhois | cut -d':' -f2- | cut -d' ' -f2,3,6 | sed 's| |-|g')
+			fi
+			if grep -q 'Registry Expiry Date:' tmpwhois; then
+				regexpdate=$(grep -m1 'Registry Expiry Date:' tmpwhois | cut -d':' -f2 | cut -d'T' -f1)
+			fi
+			if grep -q 'Domain Expiration Date:' tmpwhois; then
+				regexpdate=$(grep -m1 'Domain Expiration Date:' tmpwhois | cut -d':' -f2- | cut -d' ' -f2,3,6 | sed 's| |-|g')
+			fi
+			regorg=$(grep -m1 'Registrant Organization:|Registrant Name:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regemail=$(grep -m1 'Registrant Email:' tmpwhois | cut -d':' -f2)
 			iptmp=$(ping -c1 $domain 2>&1)
 			if echo $iptmp | grep -q 'unknown host'; then
@@ -309,7 +320,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .asia
-		elif grep 'DotAsia' tmpwhois; then
+		elif grep -q 'DotAsia' tmpwhois; then
 			registrar=$(grep -m1 'Sponsoring Registrar:|' tmpwhois | cut -d':' -f2 | sed 's|,||g')
 			regdate=$(grep -m1 -E 'Domain Create Date:' tmpwhois | cut -d':' -f2 | cut -d' ' -f1)
 			regexpdate=$(grep -m1 'Domain Expiration Date:' tmpwhois | cut -d':' -f2 | cut -d' ' -f1)
@@ -324,7 +335,7 @@ while read domain; do
 				echo "$domain,$registrar,${regdate}--${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .il
-		elif grep 'ISOC-IL' tmpwhois; then
+		elif grep -q 'ISOC-IL' tmpwhois; then
 			sed -i 's| \+ ||g' tmpwhois			#remove multiple spaces
 			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
 			registrar=$(grep -m1 'registrar name:' tmpwhois | cut -d':' -f2 | sed 's|,||g')
@@ -340,7 +351,7 @@ while read domain; do
 				echo "$domain,$registrar,expires:${regexpdate},$regorg,$regemail,$ipaddr,$hostorg" >> tmpoutfile
 			fi
 		# .tw
-		elif grep 'ISOC-IL' tmpwhois; then
+		elif grep -q 'ISOC-IL' tmpwhois; then
 			sed -i -e 's|^[ \t]*||'	tmpwhois	#remove leading white space
 			sed -i 's| \+ |\t|g' tmpwhois		#replace multiple spaces with one
 			sed -i 's|: |:|g' tmpwhois			#replace colon space with colon
