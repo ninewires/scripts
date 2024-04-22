@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Converts mixed IP list to line delimited file for live host enum
+# Converts mixed list to line delimited file of all possible IP addresses for live host enum
 # File may contain:
 #	Single IP: 192.168.1.100
-#	Range: 192.168.1.1-192.168.1.15
-#	CIDR: 192.168.1.0/24			## Broadcast ID & Network ID are removed
+#	Range: 192.168.1.1-192.168.1.15	## Range should be in oct4 only
+#	CIDR: 192.168.1.0/24			## Network ID and broadcast address are removed
 #
 # Usage: <script_name> <scope_file>
 #
@@ -13,6 +13,7 @@
 # Author: Jason Ashton (@ninewires)
 # Created: 11/14/2015
 # Overhauled: 12/22/2020
+# CIDR notation revised, additional input validation & code tweaks 04/20/2024
 
 TIME=$(date +"%H%M%S")
 filename="iplist-$TIME.txt"
@@ -27,15 +28,18 @@ NC='\x1B[0m'
 # Argument Check & Usage
 sname=$(basename "$0")
 
-if [ $# -ne 1 ]; then
+if [ $# -ne 1 ]
+then
 	echo -e "\nUsage: $sname <scope_file>"
 	exit 1
 fi
 
-# DOS File Type Check
-if file $inputfile | grep 'with CRLF line terminators' 1>/dev/null; then
-	echo -e "\n${RED}[!] ${NC}eeeeew ${WHT}$inputfile ${NC}is a windoze format :-#"
-	if ! locate dos2unix 1>/dev/null; then
+# DOS file type check
+if file $inputfile | grep 'with CRLF line terminators' 1>/dev/null
+then
+	echo -e "\n${RED}[!] ${NC}eeeeew ${WHT}$inputfile ${NC}is a Windoze format :-#"
+	if ! locate dos2unix 1>/dev/null
+	then
 		echo -e "    Looks like you don't have ${WHT}dos2unix ${NC}on your system :-/"
 		echo -e "    Get ${WHT}$inputfile ${NC}converted and try again."
 		exit 1
@@ -46,12 +50,14 @@ if file $inputfile | grep 'with CRLF line terminators' 1>/dev/null; then
 	fi
 fi
 
-# ASCII File With no Line Terminators Check
-if file $inputfile | grep 'ASCII text, with no line terminators' 1>/dev/null; then
+# ASCII file with no line terminators check
+if file $inputfile | grep 'ASCII text, with no line terminators' 1>/dev/null
+then
 	echo -e "\n${RED}[!] ${NC}Looks like ${WHT}$inputfile ${NC}is an ASCII file with no line terminators"
 	echo -e "    Use ${WHT}echo ${NC}to add a new line: ${WHT}echo >> $inputfile${NC}"
 	echo -e "    -- OR --"
-	if ! locate dos2unix 1>/dev/null; then
+	if ! locate dos2unix 1>/dev/null
+	then
 		echo -e "    Looks like you don't have ${WHT}dos2unix ${NC}on your system :-/"
 		echo -e "    Get ${WHT}$inputfile ${NC}converted and try again."
 		exit 1
@@ -62,208 +68,227 @@ if file $inputfile | grep 'ASCII text, with no line terminators' 1>/dev/null; th
 	fi
 fi
 
-# UTF-8 File Type Check
-if file $inputfile | grep 'UTF-8 Unicode text' 1>/dev/null; then
+# UTF-8 file type check
+if file $inputfile | grep 'UTF-8 Unicode text' 1>/dev/null
+then
 	echo -e "\n${RED}[!] ${NC}Looks like ${WHT}$inputfile ${NC}is a UTF-8 format file${NC}"
 	echo -e "    Concvert to ASCII via: ${WHT}cat $inputfile | iconv -f utf-8 -t ascii//TRANSLIT > <new_file>${NC}"
 	echo -e "    Get ${WHT}$inputfile ${NC}converted and try again."
 	exit 1
 fi
 
-# Input Validation
+# Input validation
 CNT=0
-
-while IFS= read -r ipaddr; do
-	# Whitespace
-	if echo "$ipaddr" | grep -q -P ' |\t'; then
+while IFS= read -r ipaddr
+do
+	# Check for whitespace on line
+	if echo "$ipaddr" | grep -q -P ' |\t'
+	then
 		echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - This Line Contains Whitespace" 2>/dev/null
 		let CNT++;
 	else
-		addr=( $(echo $ipaddr | tr '.' ' ' | tr '-' ' ' | tr '/' ' ') )
-		# IP Address
-		if [[ ${#addr[@]} -le 4 ]]; then
-			if ! [[ $ipaddr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+		# Put IP address/range/CIDR in array
+		addr=( $(echo $ipaddr | sed 's/[-|.|/]/ /g') )
+		# Verirfy proper IP address format
+		if [[ ${#addr[@]} -le 4 ]]
+		then
+			if ! [[ $ipaddr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid IP Address" 2>/dev/null
 				let CNT++;
-			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 ]]; then
+			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid IP Address" 2>/dev/null
-				let CNT++;
-			elif [[ ${addr[0]} -eq 127 ]]; then
-				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Seriously? We aren't gonna scan ourself" 2>/dev/null
 				let CNT++;
 			fi
 		fi
 
-		# Range
-		if [[ ${#addr[@]} -eq 8 ]]; then
-			if ! [[ $ipaddr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\-[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+		# Check for range format - full start/stop in octet 4 with no whitespace
+		if [[ ${#addr[@]} -eq 8 ]]
+		then
+			if ! [[ $ipaddr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\-[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid Range" 2>/dev/null
 				let CNT++;
-			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 || (${addr[4]} -eq 0 || ${addr[4]} -gt 255) || ${addr[5]} -gt 255 || ${addr[6]} -gt 255 || ${addr[7]} -gt 255 ]]; then
+			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 || (${addr[4]} -eq 0 || ${addr[4]} -gt 255) || ${addr[5]} -gt 255 || ${addr[6]} -gt 255 || ${addr[7]} -gt 255 ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid Range" 2>/dev/null
+				let CNT++;
+			elif [[ ${addr[0]} -ne ${addr[4]} || ${addr[1]} -ne ${addr[5]} || ${addr[2]} -ne ${addr[6]} ]]
+			then
+				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid Range - only octet 4 should represent range start/stop" 2>/dev/null
 				let CNT++;
 			fi
 		fi
 
-		# CIDR
-		if [[ ${#addr[@]} -eq 5 ]]; then
-			if ! [[ $ipaddr =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"/"[1-9]{1,2} ]]; then
+		# Verify CIDR notation
+		if [[ ${#addr[@]} -eq 5 ]]
+		then
+			if ! [[ $ipaddr =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"/"[1-9]{1,2} ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${WHT}[$ipaddr]${NC} Is Not a Valid CIDR Format" 2>/dev/null
 				let CNT++;
-			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 || ${addr[4]} -gt 32 ]]; then
+			elif [[ (${addr[0]} -eq 0 || ${addr[0]} -gt 255) || ${addr[1]} -gt 255 || ${addr[2]} -gt 255 || ${addr[3]} -gt 255 || ${addr[4]} -gt 32 ]]
+			then
 				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] Is Not a Valid CIDR Format" 2>/dev/null
 				let CNT++;
-			# networks larger than /8 not a thing
-			elif [[ ${addr[4]} -le 7 && ${addr[4]} -ge 0 ]]; then
-				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Check for typo, ${WHT}/${addr[4]} ${NC}Is Larger Than We Would Ever Use" 2>/dev/null
+			# Networks larger than /8 not a thing
+			elif [[ ${addr[4]} -le 7 && ${addr[4]} -ge 0 ]]
+			then
+				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Check for typo, ${WHT}/${addr[4]} ${NC}is larger than would ever be used" 2>/dev/null
 				let CNT++;
-			# oct4 should be zero for subnets <=24
-			elif [[ ${addr[4]} -le 24 && ${addr[3]} -ne 0 ]]; then
-				echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - ${WHT}${addr[3]} ${NC}Is Not a Valid Start Address for ${WHT}/${addr[4]} ${NC}Network" 2>/dev/null
-				let CNT++;
-			# oct4 start address for /25 to /30 - should be any binary multiple, but not cross a /24 boundary
-			elif [[ ${addr[4]} -ge 25 && ${addr[4]} -le 30 ]]; then
-				bits=$(( 32 - ${addr[4]} ))
-				taddr=$(( 2**${bits} ))
-				laddr=$(( ${addr[3]} + $taddr - 1 ))
-				if [[ $laddr -gt 255 ]]; then
-					echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${WHT}[$ipaddr]${NC} - ${WHT}${addr[3]} ${NC}Start Address & ${WHT}/${addr[4]} ${NC}Network Will Cross /24 Boundary (Unlikely)" 2>/dev/null
-					let CNT++;
-				fi
 			fi
 		fi
 
-		# Reserved
-		if [[ ${addr[0]} -eq 100 && (${addr[1]} -ge 64 && ${addr[1]} -le 127) ]]; then
+		# Check for reserved ranges
+		# CG-NAT range
+		if [[ ${addr[0]} -eq 100 && (${addr[1]} -ge 64 && ${addr[1]} -le 127) ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -eq 169 && ${addr[1]} -eq 254 ]]; then
+		# Localhost
+		elif [[ ${addr[0]} -eq 127 ]]
+		then
+			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Seriously? We aren't gonna scan ourself" 2>/dev/null
+			let CNT++;
+		# Link-local range
+		elif [[ ${addr[0]} -eq 169 && ${addr[1]} -eq 254 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -eq 192 && ${addr[1]} -eq 0 && ${addr[2]} -eq 0 ]]; then
+		# IETF protocol range
+		elif [[ ${addr[0]} -eq 192 && ${addr[1]} -eq 0 && ${addr[2]} -eq 0 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -eq 192 && ${addr[1]} -eq 0 && ${addr[2]} -eq 2 ]]; then
+		# TEST-NET-1 documentation range
+		elif [[ ${addr[0]} -eq 192 && ${addr[1]} -eq 0 && ${addr[2]} -eq 2 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -eq 198 && ${addr[1]} -eq 51 && ${addr[2]} -eq 100 ]]; then
+		# Former IPv6 to IPv4 relay range
+		elif [[ ${addr[0]} -eq 192 && ${addr[1]} -eq 88 && ${addr[2]} -eq 99 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -eq 203 && ${addr[1]} -eq 0 && ${addr[2]} -eq 113 ]]; then
+		# Benchmark testing range
+		elif [[ ${addr[0]} -eq 198 && ${addr[1]} -ge 18 && ${addr[1]} -le 19 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -ge 224 && ${addr[0]} -le 239 ]]; then
+		# TEST-NET-2 documentation range
+		elif [[ ${addr[0]} -eq 198 && ${addr[1]} -eq 51 && ${addr[2]} -eq 100 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
-		elif [[ ${addr[0]} -ge 240 && ${addr[0]} -le 255 ]]; then
+		# TEST-NET-3 documentation range
+		elif [[ ${addr[0]} -eq 203 && ${addr[1]} -eq 0 && ${addr[2]} -eq 113 ]]
+		then
+			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
+			let CNT++;
+		# Multicast range
+		elif [[ ${addr[0]} -ge 224 && ${addr[0]} -le 239 ]]
+		then
+			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
+			let CNT++;
+		# Reserved for future uses
+		elif [[ ${addr[0]} -ge 240 && ${addr[0]} -le 255 ]]
+		then
 			echo -e "\n${RED}[!] ${NC}In ${YEL}$inputfile ${NC}[${WHT}$ipaddr${NC}] - Reserved Address" 2>/dev/null
 			let CNT++;
 		fi
 	fi
 done < $inputfile
 
-# Check for Errors & Exit
-if [[ $CNT -gt 0 ]]; then
+# Check for errors & exit
+if [[ $CNT -gt 0 ]]
+then
 	echo -e "\n${RED}Oops, fix these errors & try again${NC}"
 	exit 1
 fi
 
 ## Generate List
-# Single IP
-while read input; do
-	addr2=( $(echo $input | tr '.' ' ' | tr '-' ' ' | tr '/' ' ') )
-	if [[ ${#addr2[@]} -eq 4 ]]; then
+# Single IP address
+while read input
+do
+	# Put IP address/range/CIDR in array
+	addr2=( $(echo $input | sed 's/[-|.|/]/ /g') )
+	if [[ ${#addr2[@]} -eq 4 ]]
+	then
 		echo $input >> tmpiplistgen
 	fi
-# IP Range
-	if [[ ${#addr2[@]} -eq 8 ]]; then
+# IP address range
+	if [[ ${#addr2[@]} -eq 8 ]]
+	then
 		rangelow=${addr2[3]}
 		rangehigh=${addr2[7]}
-		for rangeoct4 in $(seq $rangelow 1 $rangehigh); do
+		for rangeoct4 in $(seq $rangelow 1 $rangehigh)
+		do
 			echo ${addr2[0]}.${addr2[1]}.${addr2[2]}.$rangeoct4 >> tmpiplistgen
 		done
 	fi
-# CIDR	
-	if [[ ${#addr2[@]} -eq 5 ]]; then
-		bits=$(( 32 - ${addr2[4]} ))
-		# Oct1
-		if [[ ${addr2[4]} -gt 0 && ${addr2[4]} -le 7 ]]; then
-			oct1=$(( ((2**$bits - 1) / 16777216) | bc ))
-			oct1low=${addr2[0]}
-			oct1high=$(( (${addr2[0]} + $oct1) ))
-			oct2low=0
-			oct2high=255
-			oct3low=0
-			oct3high=255
-			oct4low=0
-			oct4high=255
-		#Oct2
-		elif [[ ${addr2[4]} -ge 8 && ${addr2[4]} -le 15 ]]; then
-			oct1low=${addr2[0]}
-			oct1high=${addr2[0]}
-			oct2=$(( ((2**$bits - 1) / 65536) | bc ))
-			oct2low=${addr2[1]}
-			oct2high=$(( (${addr2[1]} + $oct2) ))
-			oct3low=0
-			oct3high=255
-			oct4low=0
-			oct4high=255
-		# Oct3
-		elif [[ ${addr2[4]} -ge 16 && ${addr2[4]} -le 23 ]]; then
-			oct1low=${addr2[0]}
-			oct1high=${addr2[0]}
-			oct2low=${addr2[1]}
-			oct2high=${addr2[1]}
-			oct3=$(( ((2**$bits - 1) / 256) | bc ))
-			oct3low=${addr2[2]}
-			oct3high=$(( (${addr2[2]} + $oct3) ))
-			oct4low=0
-			oct4high=255
-		# Oct4
-		elif [[ ${addr2[4]} -ge 24 && ${addr2[4]} -le 30 ]]; then
-			oct1low=${addr2[0]}
-			oct1high=${addr2[0]}
-			oct2low=${addr2[1]}
-			oct2high=${addr2[1]}
-			oct3low=${addr2[2]}
-			oct3high=${addr2[2]}
-			oct4=$(( (2**$bits - 1) | bc ))
-			oct4low=${addr2[3]}
-			oct4high=$(( (${addr2[3]} + $oct4) ))
-		#/31
-		elif [[ ${addr2[4]} -eq 31 ]]; then
-			oct1low=${addr2[0]}
-			oct1high=${addr2[0]}
-			oct2low=${addr2[1]}
-			oct2high=${addr2[1]}
-			oct3low=${addr2[2]}
-			oct3high=${addr2[2]}
-			oct4low=${addr2[3]}
-			oct4high=$(( (${addr2[3]} + 1) ))
-		#/32
-		elif [[ ${addr2[4]} -eq 32 ]]; then
-			oct1low=${addr2[0]}
-			oct1high=${addr2[0]}
-			oct2low=${addr2[1]}
-			oct2high=${addr2[1]}
-			oct3low=${addr2[2]}
-			oct3high=${addr2[2]}
-			oct4low=${addr2[3]}
-			oct4high=${addr2[3]}
+# CIDR
+	if [[ ${#addr2[@]} -eq 5 ]]
+	then
+		cidraddr=$(echo $addr2 | cut -d'/' -f1)
+		prefix=${addr2[4]}
+		# bit shift each octet the number of bits to create dec equiv & add
+		ipdec=$(( (${addr2[0]} << 24) + (${addr2[1]} << 16) + (${addr2[2]} << 8) + ${addr2[3]} ))
+		ipbin=$( echo "obase=2; ibase=10; $ipdec" | bc )
+		netidbin=$(echo $ipbin | cut -c1-${prefix})
+		hostbits=$(( 32 - $prefix ))
+		hostbin=$(for i in $(seq 1 $hostbits); do echo -n '1'; done)
+		# Host bits in dec
+		hostdec=0
+		for (( i=0; i<$hostbits; i++ ))
+		do
+			hostdec=$(( (hostdec << 1) ^ 1 ))
+		done
+		# Subnet mask in dec/hex
+		maskdec=$(( $hostdec ^ 0xFFFFFFFF ))
+		maskhex=$(echo "ibase=10;obase=16;$maskdec" | bc)
+		# Convert subnet mask octets from hex to dec
+		maskoct1=$(echo "obase=10; ibase=16; ${maskhex:0:2}" | bc)
+		maskoct2=$(echo "obase=10; ibase=16; ${maskhex:2:2}" | bc)
+		maskoct3=$(echo "obase=10; ibase=16; ${maskhex:4:2}" | bc)
+		maskoct4=$(echo "obase=10; ibase=16; ${maskhex:6:2}" | bc)
+
+		# Network ID - AND IP address with network prefix
+		netid1=$(( ${addr2[0]} & $maskoct1 ))
+		netid2=$(( ${addr2[1]} & $maskoct2 ))
+		netid3=$(( ${addr2[2]} & $maskoct3 ))
+		netid4=$(( ${addr2[3]} & $maskoct4 ))
+		netid="$netid1.$netid2.$netid3.$netid4"
+		# Broadcast address - concat network ID & host binary
+		bcaddrbin=$(echo "${netidbin}${hostbin}")
+		bcaddr1=$(echo "obase=10; ibase=2; ${bcaddrbin:0:8}" | bc)
+		bcaddr2=$(echo "obase=10; ibase=2; ${bcaddrbin:8:8}" | bc)
+		bcaddr3=$(echo "obase=10; ibase=2; ${bcaddrbin:16:8}" | bc)
+		bcaddr4=$(echo "obase=10; ibase=2; ${bcaddrbin:24:8}" | bc)
+
+		if [[ "$cidraddr" != "$netid" ]]
+		then
+			echo -e "${YEL}[!] ${NC}Note that ${YEL}$input ${NC}is not the proper start of a range and could be a typo."
 		fi
-	# Generate IPs from CIDR
-		for w in $(seq $oct1low 1 $oct1high); do
-			for x in $(seq $oct2low 1 $oct2high); do
-				for y in $(seq $oct3low 1 $oct3high); do
-					for z in $(seq $oct4low 1 $oct4high); do
+
+		# Loop to create all possible IP addressess
+		for w in $(seq $netid1 1 $bcaddr1)
+		do
+			for x in $(seq $netid2 1 $bcaddr2)
+			do
+				for y in $(seq $netid3 1 $bcaddr3)
+				do
+					for z in $(seq $netid4 1 $bcaddr4)
+					do
 						echo $w.$x.$y.$z >> tmpiplistgen2
 					done
 				done
 			done
 		done
 
-		# Remove Network/Broadcast IDs
-		if [[ ${addr2[4]} -ge 31 && ${addr2[4]} -le 32 ]]; then
+		# Remove Network ID/Broadcast address
+		if [[ ${addr2[4]} -ge 31 && ${addr2[4]} -le 32 ]]
+		then
 			cat tmpiplistgen2 >> tmpiplistgen
 		else
 			tlines=$(wc -l tmpiplistgen2 | sed -e 's|^ *||' | cut -d' ' -f1)
@@ -274,9 +299,11 @@ while read input; do
 	fi
 done < $inputfile
 
+# Dse-dupe & sort in proper IP address order
 sort -uV tmpiplistgen >> $filename
 rm tmpiplistgen* 2>/dev/null
 
+# Stats
 hostcount=$(wc -l $filename | sed -e 's|^ *||' | cut -d' ' -f1)
 echo -e "\nSee ${WHT}$filename ${NC}in Current Working Dir"
 echo -e "  ${WHT}$hostcount ${NC}Total Addresses\n"
